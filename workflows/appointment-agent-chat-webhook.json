@@ -1,0 +1,337 @@
+{
+  "name": "AI Appointment Agent (Chat Webhook + Google Calendar)",
+  "nodes": [
+    {
+      "parameters": {
+        "contextWindowLength": 10,
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.sessionId }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -208,
+        208
+      ],
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "id"
+        },
+        "timeMin": "={{ $fromAI('Start_Time', `Return ISO-8601 in Europe/Istanbul timezone (+03:00). If missing offset, assume +03:00.`, 'string') }}",
+        "timeMax": "={{ $fromAI('End_Time', `Return ISO-8601 in Europe/Istanbul timezone (+03:00). If missing offset, assume +03:00.`, 'string') }}",
+        "options": {
+          "timezone": {
+            "__rl": true,
+            "value": "Europe/Istanbul",
+            "mode": "list",
+            "cachedResultName": "Europe/Istanbul"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        144,
+        192
+      ],
+      "name": "Check availability"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "id"
+        },
+        "start": "={{ $fromAI('Start', 'Return ISO-8601 in Europe/Istanbul timezone (+03:00). If missing offset, assume +03:00.', 'string') }}",
+        "end": "={{ $fromAI('End', 'Return ISO-8601 in Europe/Istanbul timezone (+03:00). If missing offset, assume +03:00.', 'string') }}",
+        "additionalFields": {
+          "description": "={{ 'Telefon: ' + $fromAI('Phone_Number', '', 'string') }}",
+          "summary": "={{ 'Randevu: ' + $fromAI('name', '', 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        272,
+        192
+      ],
+      "name": "Create event"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "randevu",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -624,
+        -64
+      ],
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { reply: $json.output } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        400,
+        -64
+      ],
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "baa44bf7-d48d-414f-845f-c4e102d48172",
+              "name": "chatInput",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            },
+            {
+              "id": "4f1e501f-cfa0-4c4f-96e9-a72686137772",
+              "name": "sessionId",
+              "value": "={{ $json.body.sessionId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -416,
+        -64
+      ],
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "id"
+        },
+        "timeMax": "={{ $now.plus({ months: 3 }) }}",
+        "options": {
+          "query": "={{ 'Randevu: ' + $fromAI('Search_Name', 'Customer full name to search for', 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        400,
+        192
+      ],
+      "name": "Search Events"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "id"
+        },
+        "eventId": "={{ $fromAI('Event_ID', `The ID of the event to update. Get this from Search Events tool first.`, 'string') }}",
+        "updateFields": {
+          "end": "={{ $fromAI('End', 'Return ISO-8601 in Europe/Istanbul timezone (+03:00). If missing offset, assume +03:00.', 'string') }}",
+          "start": "={{ $fromAI('Start', 'New start time in ISO-8601 in Europe/Istanbul timezone (+03:00).', 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        528,
+        192
+      ],
+      "name": "Update Event"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "id"
+        },
+        "eventId": "={{ $fromAI('Event_ID', 'The ID of the event to cancel. Get this from Search Events tool first.', 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        656,
+        192
+      ],
+      "name": "Cancel Event"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -400,
+        192
+      ],
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "=🎯 Role of the Assistant\nYou are a virtual assistant specializing in appointment management for the business. Your goal is to schedule, modify, and cancel appointments accurately, ensuring real availability while providing a smooth experience for customers. ALWAYS answer in the same language in which the question was asked. NEVER share any reservation information with the user before receiving full name and phone number.\n\n🕒 Working Hours & Rules\nMonday - Friday: 08:00 AM - 10:00 PM\n\nSaturday: 11:00 AM - 05:00 PM\n\nSunday: ❌ Closed\n\nService Duration: 45 minutes | Break: 15 minutes\n\nNote: Appointments can only start on the hour (e.g., 09:00, 10:00).\n\n❌ PUBLIC HOLIDAYS (EN ÜST ÖNCELİKLİ KONTROL)\nHerhangi bir işlem yapmadan önce MUTLAKA bu listeyi kontrol et. Eğer tarih listedeyse, saat başı kontrolü yapmadan direkt tatil uyarısını ver:\n\n1 Ocak: Yılbaşı\n\n19 Mart: Ramazan Bayramı Arifesi (SAAT 13:00'ten itibaren ve sonrası KESİNLİKLE KAPALI. Sadece 08:00 - 12:00 arası randevu alınabilir.)\n\n20-21-22 Mart: Ramazan Bayramı (TAM GÜN KESİNLİKLE KAPALI.)\n\n23 Nisan: Ulusal Egemenlik ve Çocuk Bayramı\n\n1 Mayıs: Emek ve Dayanışma Günü\n\n19 Mayıs: Atatürk'ü Anma, Gençlik ve Spor Bayramı\n\n26 Mayıs: Kurban Bayramı Arifesi (SAAT 13:00'ten itibaren ve sonrası KESİNLİKLE KAPALI.)\n\n27-30 Mayıs: Kurban Bayramı (TAM GÜN KESİNLİKLE KAPALI.)\n\n15 Temmuz: Demokrasi ve Milli Birlik Günü\n\n30 Ağustos: Zafer Bayramı\n\n28 Ekim: Cumhuriyet Bayramı Arifesi (SAAT 13:00'ten itibaren ve sonrası KESİNLİKLE KAPALI.)\n\n29 Ekim: Cumhuriyet Bayramı\n\n📅 APPOINTMENT BOOKING PROCESS\n1️⃣ Request Customer Information (Mandatory):\nFull Name, Phone Number, Desired Date and Time.\n\n2️⃣ Holiday & Time Check (Critical Logic):\n\nÖnce Tatil Kontrolü: Eğer kullanıcı 19 Mart, 26 Mayıs veya 28 Ekim için saat 13:00 veya sonrası için randevu isterse: \"Üzgünüm, resmi tatil arifesi nedeniyle saat 13:00'den sonra kapalıyız.\" de ve işlemi durdur.\n\nSaat Başı Kontrolü: Eğer kullanıcının istediği saat tam saat başı ise (Örn: 18:00, 11:00), ASLA \"randevularımız saat başı yapılmaktadır\" uyarısı verme. Direkt uygunluk kontrolüne geç.\n\nYuvarlama: Sadece dakika :00 değilse (Örn: 10:15) en yakın saate yuvarla ve kullanıcıyı bilgilendir.\n\n3️⃣ Availability Check:\n\nIf outside office hours → offer available slots.\n\nIf unavailable → suggest actual available slots on that day.\n\n🚨 Do not confirm immediately. Ask ONCE for confirmation.\n\n4️⃣ Confirmation & Calendar Update:\n\nGoogle Calendar Event Title: Randevu: [Customer Name]\n\nGoogle Calendar Event Description: Telefon: [Phone Number]\n\n🔄 MODIFICATION & CANCELLATION\nSecurity: NEVER share, modify, or cancel without verifying Full Name AND Phone Number (Exact match).\n\nSearch: Use \"Search Events\" first. If no match: \"Bu bilgilerle eşleşen randevu bulamadım.\"\n\n🔒 SECURITY & COMMUNICATION\nNo Leaks: Bilgi sızdırma yok. İsim doğrulanması yetmez, telefon da şart.\n\nClear Responses: Yanıtlar profesyonel ve net olmalı. Saat başı olan taleplere mantıksız reddetme cevapları verilmemeli.\n\n📅 Today's date: {{ $now }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -112,
+        -128
+      ],
+      "name": "AI Agent1"
+    }
+  ],
+  "connections": {
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check availability": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create event": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Events": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Event": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Event": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {}
+}
